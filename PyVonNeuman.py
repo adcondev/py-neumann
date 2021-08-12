@@ -2,6 +2,7 @@ import math
 import sys
 import numpy as np
 import pandas as pd
+import tkinter
 
 
 class ConfigurationError(Exception):
@@ -25,12 +26,15 @@ class VonNeumanMemory:
     Clase para controlar la memoria.
     """
 
-    def init_mem(self):
+    def init_mem(self, isDict=False, theDict={}):
         """
         Hacer un vaciado de la memoria.
         """
-        self.mem = ['   ' for _ in range(0, 100)]
-        self.mem[0] = '001'  #: Operación de lectura.
+        if not isDict:
+            self.mem = ['   ' for _ in range(0, 100)]
+            self.mem[0] = '001'  #: Operación de lectura.
+        else:
+            self.mem = theDict
 
     def get_memint(self, data):
         """
@@ -52,15 +56,16 @@ class VonNeumanMemory:
         Acceder a un espacio en memoria.
         """
         self.chk_addr(data)
-        return self.mem[data]
+        return self.mem[data].get()
 
     def set_mem(self, addr, data):
         """
         Escribir en un espacio en memoria.
         """
         self.chk_addr(addr)
-        self.show()
-        self.mem[addr] = self.pad(data)
+        # self.show()
+        self.mem[addr].delete(0, tkinter.END)
+        self.mem[addr].insert(tkinter.INSERT, self.pad(data))
 
     def show(self):
         print(pd.DataFrame(np.array(self.mem).reshape(10, 10).T))
@@ -93,10 +98,6 @@ class VonNeumanMemory:
         """ Subtract """
         self.acc -= self.get_memint(data)
 
-    def opcode_10(self, data):
-        """ Mult """
-        self.acc = self.get_memint(data)
-
 
 class VonNeumanIO:
     """
@@ -115,11 +116,14 @@ class VonNeumanIO:
         """
         self.output = []
 
-    def read_deck(self, fname):
+    def read_deck(self, fname, isFile=True):
         """
         Lectura de una lista de instrucciones(.txt).
         """
-        self.reader = [s.rstrip('\n') for s in open(fname, 'r').readlines()]
+        if isFile:
+            self.reader = [s.rstrip('\n') for s in open(fname, 'r').readlines()]
+        else:
+            self.reader = fname
         self.reader.reverse()
 
     def format_output(self):
@@ -162,10 +166,6 @@ class CPU(object):
         self.init_cpu()
         self.reset()
         try:
-            self.init_mem()
-        except AttributeError:
-            raise ConfigurationError('Realizar herencia de los 3 componentes en un solo objeto.')
-        try:
             self.init_input()
             self.init_output()
         except AttributeError:
@@ -204,10 +204,10 @@ class CPU(object):
                     self.__opcodes.update({opcode: getattr(self, 'opcode_{0}'.format(opcode))})  # Se actualiza el
                     # diccionario, cuando se llame determinado opcode en el diccionario, se realizará su acción.
 
-    def fetch(self):
+    def fetch(self, isReturn=False):
         """
-        Este método recupera una instrucción desde la dirección de memoria apuntada por puntero del programa
-        Then we increment the program pointer.
+        Este método recupera una instrucción desde la dirección de memoria apuntada por puntero del programa.
+        Luego se incrementa el valor del contador de programa.
         """
         self.ir = self.get_memint(self.pc)
         self.pc += 1
@@ -243,7 +243,7 @@ class VonNeuman(CPU, VonNeumanMemory, VonNeumanIO):
     """
 
     def opcode_3(self, data):
-        """ Test Accumulator Contents """
+        """ Conditional Jump """
         if self.acc < 0:
             self.pc = data
 
@@ -268,7 +268,7 @@ class VonNeuman(CPU, VonNeumanMemory, VonNeumanIO):
 def main():
     try:
         c = VonNeuman()
-        deck = 'prog1.txt'  #: Cuenta hasta 10.
+        deck = 'potsDe2.txt'  #: Cuenta hasta 10.
         if len(sys.argv) > 1:
             deck = sys.argv[1]
         c.read_deck(deck)
@@ -276,11 +276,9 @@ def main():
     except ConfigurationError as e:
         print("Configuration Error: {0}}".format(e))
     except CPUException as e:
-        # Here we trap all exceptions which can be triggered by user code, and display an error to the end-user.
         print("IR: {0}\tPC: {1}\tACC: {2}".format(c.ir, c.pc, c.acc))
         print(str(e))
     except:
-        # For every other exceptions, which are normally Python related, we display it.
         print("IR: {0}\nPC: {1}\nOutput: {2}\n".format(c.ir, c.pc, c.format_output()))
         raise
 
