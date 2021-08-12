@@ -1,8 +1,15 @@
+import tkinter
+from tkinter import messagebox
 import math
 import sys
+import os
 import numpy as np
 import pandas as pd
-import tkinter
+import datetime
+
+c = 1
+r = 1
+color = "Green"
 
 
 class ConfigurationError(Exception):
@@ -41,8 +48,10 @@ class VonNeumanMemory:
         Ya que se tiene una memoria basada en strings, se
         requiere la conversión de string a int.
         """
-        return int(self.get_mem(data))
-
+        try:
+            return int(self.get_mem(data))
+        except:
+            return 0
     def chk_addr(self, addr):
         """
         Validar que el acceso a memoria sea válido
@@ -150,11 +159,18 @@ class VonNeumanIO:
 
     def opcode_0(self, data):
         """ INPUT """
+        global c
+        reader.delete(str(c) + ".0", str(c) + ".5")
+        reader.edit_reset()
         self.set_mem(data, self.get_input())
+        c = c + 1
 
     def opcode_5(self, data):
         """ OUTPUT """
+        global r
+        output.insert(str(r) + ".0", str(self.get_mem(data)) + "\n")
         self.stdout(self.get_mem(data))
+        r = r + 1
 
 
 class CPU(object):
@@ -165,6 +181,10 @@ class CPU(object):
     def __init__(self):
         self.init_cpu()
         self.reset()
+        # try:
+        #   self.init_mem()
+        # except AttributeError:
+        #   raise ConfigurationError('Realizar herencia de los 3 componentes en un solo objeto.')
         try:
             self.init_input()
             self.init_output()
@@ -217,11 +237,18 @@ class CPU(object):
         Procesa un solo opcode desde el PC actual.
         Este método es el que se repite a manera de loop.
         """
+
         self.fetch()
         opcode, data = int(math.floor(self.ir / 100)), self.ir % 100
         if opcode in self.__opcodes:
             print("IR: {0}\tPC: {1}\tACC: {2}".format(self.ir, self.pc, self.acc))
+            accEntry.delete(0, tkinter.END)
+            accEntry.insert(0, str(self.acc))
+            opcodeEntry.delete(0, tkinter.END)
+            opcodeEntry.insert(0, str(opcode))
             print("NAME:", self.nmonics[opcode], "VALUE:", data)
+            operandEntry.delete(0, tkinter.END)
+            operandEntry.insert(0, self.nmonics[opcode])
             self.__opcodes[opcode](data)
         else:
             raise InvalidOperation('Opcode inválido: {0}'.format(opcode))
@@ -265,23 +292,186 @@ class VonNeuman(CPU, VonNeumanMemory, VonNeumanIO):
         self.reset()
 
 
-def main():
-    try:
-        c = VonNeuman()
-        deck = 'potsDe2.txt'  #: Cuenta hasta 10.
-        if len(sys.argv) > 1:
-            deck = sys.argv[1]
-        c.read_deck(deck)
-        c.run()
-    except ConfigurationError as e:
-        print("Configuration Error: {0}}".format(e))
-    except CPUException as e:
-        print("IR: {0}\tPC: {1}\tACC: {2}".format(c.ir, c.pc, c.acc))
-        print(str(e))
-    except:
-        print("IR: {0}\nPC: {1}\nOutput: {2}\n".format(c.ir, c.pc, c.format_output()))
-        raise
+top = tkinter.Tk()
+top.geometry("750x600")
+
+vonNeu = VonNeuman()
+
+# BOTONES
+offsetX1 = 360
+offsetY1 = 500
+# LISTAS
+offsetX2 = 125
+offsetY2 = 350
+# Tamaño de memoria
+height = 10
+width = 10
+cells = {}
 
 
-if __name__ == '__main__':
-    main()
+def helloworld():
+    messagebox.showinfo("hello", "hola")
+
+
+def loadDeck():
+    vonNeu.running = True  #: Run or Halt?
+    vonNeu.pc = int(pcEntry.get())  #: Contador de programa
+    vonNeu.ir = int(insRegEntry.get())  #: Registro de instrucción
+    vonNeu.acc = int(accEntry.get())  #: Acumulador
+    vonNeu.init_mem(True, cells)
+    if vonNeu.mem[0].get() == "":
+        vonNeu.mem[0].insert(tkinter.INSERT, "001")
+    vonNeu.mem[vonNeu.pc].configure({"background": "Green"})
+    reader.insert(tkinter.INSERT, deck.get("1.0", tkinter.END))
+    instList = deck.get("1.0", tkinter.END).split("\n")
+    instList.pop()
+    vonNeu.read_deck(instList, False)
+    print("VoNeu Reader:", vonNeu.reader)
+
+
+def loadfromDeck():
+    vonNeu.running = True  #: Run or Halt?
+    vonNeu.pc = int(pcEntry.get())  #: Contador de programa
+    vonNeu.ir = int(insRegEntry.get())  #: Registro de instrucción
+    vonNeu.acc = int(accEntry.get())  #: Acumulador
+    vonNeu.init_mem(True, cells)
+    if vonNeu.mem[0].get() == "":
+        vonNeu.mem[0].insert(tkinter.INSERT, "001")
+    vonNeu.mem[vonNeu.pc].configure({"background": "Green"})
+    with open(txtEntry.get(), "r") as txtr:
+        data = txtr.readlines()
+    for x in data:
+        deck.insert(tkinter.END, x)
+    instList = deck.get("1.0", tkinter.END).split("\n")
+    instList.pop()
+    vonNeu.read_deck(instList, False)
+    txtEntry.delete(0, 'end')
+    print("VoNeu Reader:", vonNeu.reader)
+
+
+def resetApp():
+    python = sys.executable
+    os.execl(python, python, *sys.argv)
+
+
+def timeStep():
+    if vonNeu.running:
+        vonNeu.mem[vonNeu.pc].configure({"background": "white"})
+        vonNeu.process()
+        vonNeu.mem[vonNeu.pc].configure({"background": "Green"})
+        pcEntry.delete(0, tkinter.END)
+        pcEntry.insert(tkinter.INSERT, str(vonNeu.pc))
+        insRegEntry.delete(0, tkinter.END)
+        insRegEntry.insert(tkinter.INSERT, str(vonNeu.ir))
+
+
+def fastStep():
+    timeStep()
+    top.after(40, fastStep)
+
+
+def slowStep():
+    timeStep()
+    top.after(250, slowStep)
+
+
+def haltReset():
+    if vonNeu.running:
+        vonNeu.running = False
+    else:
+        vonNeu.running = True
+
+
+def cleanMem():
+    for i in range(height):
+        for j in range(width):
+            cells[i * 10 + j].delete(0, 'end')
+
+
+reset = tkinter.Button(top, text="Reset", command=resetApp, padx=0, pady=0)
+cleanMem = tkinter.Button(top, text="Clean Mem", command=cleanMem)
+step = tkinter.Button(top, text="Step", command=timeStep)
+runSlow = tkinter.Button(top, text="Slow", command=slowStep)
+runFast = tkinter.Button(top, text="Fast", command=fastStep)
+halt = tkinter.Button(top, text="Halt", command=haltReset)
+load = tkinter.Button(top, text="Load", command=loadDeck)
+loadfrom = tkinter.Button(top, text="Txt", command=loadfromDeck)
+
+reset.place(x=offsetX1 - 40, y=offsetY1)
+cleanMem.place(x=offsetX1 + 50, y=offsetY1)
+step.place(x=offsetX1 - 50, y=offsetY1 + 30)
+runSlow.place(x=offsetX1, y=offsetY1 + 30)
+runFast.place(x=offsetX1 + 50, y=offsetY1 + 30)
+halt.place(x=offsetX1 + 100, y=offsetY1 + 30)
+load.place(x=offsetX2 + 70, y=offsetY2 + 25)
+loadfrom.place(x=offsetX2 + 70, y=offsetY2 + 55)
+#
+deck = tkinter.Text(top, width=6, height=10, undo=False)
+reader = tkinter.Text(top, width=6, height=10, undo=False)
+output = tkinter.Text(top, width=6, height=10, undo=False)
+
+deck.place(x=offsetX2, y=offsetY2)
+reader.place(x=offsetX2 + 125, y=offsetY2)
+output.place(x=offsetX2 + 400, y=offsetY2)
+
+#
+deckLabel = tkinter.Label(top, text="Instrucciones", font='Helvetica 9 bold')
+readerLabel = tkinter.Label(top, text="Reader", font='Helvetica 9 bold')
+cpuLabel = tkinter.Label(top, text="CPU", font='Helvetica 9 bold')
+outputLabel = tkinter.Label(top, text="Output", font='Helvetica 9 bold')
+decoderLabel = tkinter.Label(top, text="Decodificador de Inst", font='Helvetica 9 bold')
+memLabel = tkinter.Label(top, text="Memoria", font='Helvetica 14 bold')
+
+deckLabel.place(x=offsetX2 - 10, y=offsetY2 - 25)
+readerLabel.place(x=offsetX2 + 130, y=offsetY2 - 25)
+cpuLabel.place(x=offsetX2 + 260, y=offsetY2 - 25)
+outputLabel.place(x=offsetX2 + 400, y=offsetY2 - 25)
+decoderLabel.place(x=offsetX2 + 225, y=offsetY2 + 30)
+memLabel.place(x=320, y=15)
+
+#
+pcLabel = tkinter.Label(top, text="PC:")
+insRegLabel = tkinter.Label(top, text="Registro de Inst:")
+opcodeLabel = tkinter.Label(top, text="Opcode:")
+operandLabel = tkinter.Label(top, text="Operando:")
+accLabel = tkinter.Label(top, text="Acumulador:")
+txtLabel = tkinter.Label(top, text="File:")
+
+pcLabel.place(x=offsetX2 + 240, y=offsetY2)
+insRegLabel.place(x=offsetX2 + 210, y=offsetY2 + 50)
+opcodeLabel.place(x=offsetX2 + 190, y=offsetY2 + 75)
+operandLabel.place(x=offsetX2 + 285, y=offsetY2 + 75)
+accLabel.place(x=offsetX2 + 220, y=offsetY2 + 110)
+txtLabel.place(x=offsetX1 - 210, y=offsetY1 + 25)
+
+for i in range(height):
+    instLabel = tkinter.Label(top, text=str(i) + " " + vonNeu.nmonics[i])
+    colLabel = tkinter.Label(top, text="0" + str(i))
+    rowLabel = tkinter.Label(top, text=str(i) + "0")
+    instLabel.place(x=650, y=i * 25 + 70)
+    rowLabel.place(x=i * 50 + 120, y=45)
+    colLabel.place(x=90, y=i * 25 + 70)
+    for j in range(width):
+        memoryGrid = tkinter.Entry(top, width=6)
+        memoryGrid.place(x=i * 50 + 120, y=j * 25 + 70)
+        cells[i * 10 + j] = memoryGrid
+
+#
+pcEntry = tkinter.Entry(top, width=6)
+pcEntry.insert(tkinter.INSERT, "0")
+insRegEntry = tkinter.Entry(top, width=6)
+insRegEntry.insert(tkinter.INSERT, "0")
+opcodeEntry = tkinter.Entry(top, width=6)
+operandEntry = tkinter.Entry(top, width=6)
+accEntry = tkinter.Entry(top, width=8)
+accEntry.insert(tkinter.INSERT, "0")
+txtEntry = tkinter.Entry(top, width=10)
+
+pcEntry.place(x=offsetX2 + 270, y=offsetY2)
+insRegEntry.place(x=offsetX2 + 300, y=offsetY2 + 50)
+opcodeEntry.place(x=offsetX2 + 245, y=offsetY2 + 75)
+operandEntry.place(x=offsetX2 + 350, y=offsetY2 + 75)
+accEntry.place(x=offsetX2 + 295, y=offsetY2 + 110)
+txtEntry.place(x=offsetX1 - 180, y=offsetY1 + 25)
+
+top.mainloop()
