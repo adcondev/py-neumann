@@ -1,2 +1,2 @@
 # PyNeumann
-Implementación de simulador basado en la Arquitectura Von Neumann.
+Von Neumann's architecture simulator was developed during MSc. computer architectures & OS lectures.
